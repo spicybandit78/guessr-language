@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LanguageGuessr</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf8f4;
+  --ink: #1a1814;
+  --panel: #f0ece4;
+  --border: #d4ccbc;
+  --border2: #b8ae9c;
+  --accent: #2d5a8e;
+  --accent-dim: #e8f0f8;
+  --accent2: #7a3a1a;
+  --green: #1a5c30;
+  --green-bg: #e8f5ee;
+  --red: #7a1a1a;
+  --red-bg: #f5e8e8;
+  --muted: #7a7060;
+  --text: #1a1814;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; width: 100%; background: var(--bg); font-family: 'DM Sans', sans-serif; color: var(--text); overflow: hidden; -webkit-tap-highlight-color: transparent; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+/* HEADER */
+header {
+  flex-shrink: 0; background: var(--ink); padding: 0 16px; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo { font-family: 'Lora', serif; font-size: 20px; font-style: italic; color: #f0ece4; letter-spacing: 0.5px; }
+.logo span { font-style: normal; color: #9a8c7a; }
+.hud { display: flex; align-items: center; gap: 16px; }
+.hud-lbl { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 2px; color: #6a6050; text-transform: uppercase; }
+.hud-val { font-family: 'JetBrains Mono', monospace; font-size: 18px; color: #d4c8a8; line-height: 1; text-align: right; }
+.pips { display: flex; gap: 4px; }
+.pip { width: 8px; height: 8px; border-radius: 50%; background: #3a3428; border: 1px solid #5a5040; transition: all .3s; }
+.pip.done { background: #5a5040; border-color: #9a8c7a; }
+.pip.cur  { background: #d4c8a8; border-color: #d4c8a8; box-shadow: 0 0 6px rgba(212,200,168,.5); }
+
+/* CONTROLS BAR */
+#controls-bar {
+  flex-shrink: 0; background: var(--panel); border-bottom: 1px solid var(--border);
+  padding: 8px 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.toggle-group { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.toggle-btn {
+  padding: 6px 14px; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  letter-spacing: 1px; text-transform: uppercase; background: var(--bg);
+  border: none; cursor: pointer; color: var(--muted); transition: all .15s;
+}
+.toggle-btn.active { background: var(--ink); color: var(--bg); }
+.toggle-sep { width: 1px; background: var(--border); }
+#round-info {
+  margin-left: auto; font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--muted); letter-spacing: 1px;
+}
+
+/* MAIN CONTENT */
+#main {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; min-height: 0;
+}
+
+/* CONTENT PANEL — shows text or audio */
+#content-panel {
+  flex-shrink: 0; background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 16px; position: relative;
+}
+
+/* TEXT MODE */
+#text-display {
+  font-family: 'Lora', serif; font-size: 18px; line-height: 1.7;
+  color: var(--ink); display: none;
+  min-height: 80px;
+}
+#text-display.show { display: block; }
+#text-loading {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--muted); letter-spacing: 1px;
+  display: flex; align-items: center; gap: 10px;
+}
+#text-loading.hidden { display: none; }
+.dots-anim::after {
+  content: '...'; animation: dots 1.2s steps(4, end) infinite;
+}
+@keyframes dots {
+  0%,20%  { content: '.'; }
+  40%     { content: '..'; }
+  60%,100%{ content: '...'; }
+}
+
+/* AUDIO MODE */
+#audio-display { display: none; align-items: center; gap: 16px; }
+#audio-display.show { display: flex; }
+#play-audio-btn {
+  width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
+  background: var(--ink); border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: var(--bg); transition: transform .15s;
+}
+#play-audio-btn:active { transform: scale(.95); }
+#play-audio-btn.playing { background: var(--accent); }
+.audio-info { flex: 1; }
+.audio-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+#audio-waveform {
+  display: flex; align-items: center; gap: 2px; height: 28px;
+}
+.wave-bar {
+  width: 3px; border-radius: 2px; background: var(--border);
+  transition: background .2s;
+}
+.wave-bar.active { background: var(--accent); animation: wave-pulse var(--dur, .8s) ease-in-out infinite alternate; }
+@keyframes wave-pulse { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+#audio-status { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* Hint pill */
+#hint-area { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hint-pill {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px;
+  padding: 3px 10px; border-radius: 20px; border: 1px solid var(--border);
+  color: var(--muted); background: var(--panel);
+}
+.hint-pill.revealed { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+#hint-btn {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px;
+  padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border2);
+  color: var(--muted); background: transparent; cursor: pointer; transition: all .15s;
+  text-transform: uppercase;
+}
+#hint-btn:hover { border-color: var(--accent); color: var(--accent); }
+#hint-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+/* WAGER */
+#wager-area {
+  flex-shrink: 0; padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel);
+}
+.wager-lbl { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; flex-shrink: 0; }
+.wager-opts { display: flex; gap: 6px; flex: 1; }
+.wager-btn {
+  flex: 1; padding: 6px 0; border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  cursor: pointer; transition: all .15s; text-align: center;
+}
+.wager-btn.selected {
+  background: var(--ink); color: var(--bg); border-color: var(--ink);
+}
+.wager-btn:hover:not(.selected) { border-color: var(--ink); color: var(--ink); }
+.wager-pts {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--muted); flex-shrink: 0;
+}
+#wager-preview { color: var(--accent); }
+
+/* LANGUAGE GRID */
+#lang-section {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+}
+#lang-section::-webkit-scrollbar { width: 4px; }
+#lang-section::-webkit-scrollbar-track { background: var(--panel); }
+#lang-section::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+#lang-search {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  padding: 9px 14px; border-radius: 4px; outline: none; margin-bottom: 10px;
+  transition: border-color .2s;
+}
+#lang-search::placeholder { color: var(--muted); }
+#lang-search:focus { border-color: var(--accent); }
+
+#lang-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+}
+.lang-btn {
+  padding: 9px 12px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--ink); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  cursor: pointer; text-align: left; transition: all .12s;
+  display: flex; align-items: center; gap: 8px;
+}
+.lang-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+.lang-btn .lang-native { font-size: 10px; color: var(--muted); margin-left: auto; font-family: 'JetBrains Mono', monospace; }
+.lang-btn.correct { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.lang-btn.wrong   { background: var(--red-bg);   border-color: var(--red);   color: var(--red); opacity: .6; }
+.lang-btn:disabled { cursor: not-allowed; }
+
+/* RESULT OVERLAY */
+#result-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(26,24,20,.95); flex-direction: column;
+  align-items: center; justify-content: center; padding: 20px;
+}
+#result-overlay.show { display: flex; }
+.res-card {
+  width: 100%; max-width: 400px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 24px; text-align: center;
+}
+.res-lang-name { font-family: 'Lora', serif; font-size: 28px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.res-lang-native { font-family: 'Lora', serif; font-size: 16px; font-style: italic; color: var(--muted); margin-bottom: 16px; }
+.res-outcome { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 2px; margin-bottom: 12px; text-transform: uppercase; }
+.res-outcome.correct { color: var(--green); }
+.res-outcome.wrong   { color: var(--red); }
+.res-score { font-family: 'JetBrains Mono', monospace; font-size: 56px; font-weight: 600; color: var(--accent); line-height: 1; }
+.res-score-lbl { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.res-detail { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+.res-detail span { color: var(--ink); }
+.res-sample {
+  background: var(--panel); border-radius: 4px; padding: 12px 14px;
+  font-family: 'Lora', serif; font-size: 14px; font-style: italic;
+  color: var(--muted); margin-bottom: 16px; text-align: left; line-height: 1.6;
+}
+.btn-next {
+  width: 100%; background: var(--ink); color: var(--bg);
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; letter-spacing: 2px;
+  border: none; padding: 13px; border-radius: 4px; cursor: pointer; text-transform: uppercase;
+}
+.btn-next:active { opacity: .85; }
+
+/* FINAL */
+#final-overlay {
+  display: none; position: fixed; inset: 0; z-index: 300;
+  background: rgba(26,24,20,.97); flex-direction: column;
+  align-items: center; justify-content: center; padding: 20px;
+}
+#final-overlay.show { display: flex; }
+.final-card {
+  width: 100%; max-width: 400px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 28px; text-align: center;
+}
+.final-title { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.final-score { font-family: 'Lora', serif; font-size: 80px; font-weight: 600; color: var(--ink); line-height: 1; }
+.final-max { font-size: 13px; color: var(--muted); margin-bottom: 12px; font-family: 'JetBrains Mono', monospace; }
+.final-grade { font-size: 14px; padding: 5px 16px; border-radius: 20px; display: inline-block; margin-bottom: 20px; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
+.fg-s { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+.fg-a { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
+.fg-b { background: #f5f0e0; color: #7a6010; border: 1px solid #c8a830; }
+.fg-c { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="logo"><em>Language</em><span>Guessr</span></div>
+  <div class="hud">
+    <div class="pips" id="pips"></div>
+    <div>
+      <div class="hud-lbl">Score</div>
+      <div class="hud-val" id="hud-score">0</div>
+    </div>
+  </div>
+</header>
+
+<div id="controls-bar">
+  <div class="toggle-group">
+    <button class="toggle-btn active" id="mode-text" onclick="setInputMode('text')">📄 Text</button>
+    <div class="toggle-sep"></div>
+    <button class="toggle-btn" id="mode-audio" onclick="setInputMode('audio')">🔊 Audio</button>
+  </div>
+  <div class="toggle-group">
+    <button class="toggle-btn active" id="diff-easy" onclick="setDifficulty('easy')">Common</button>
+    <div class="toggle-sep"></div>
+    <button class="toggle-btn" id="diff-hard" onclick="setDifficulty('hard')">Hard</button>
+  </div>
+  <div id="round-info">ROUND 1 / 5</div>
+</div>
+
+<div id="main">
+
+  <div id="content-panel">
+    <div id="text-loading"><span class="dots-anim">Fetching sample</span></div>
+    <div id="text-display"></div>
+
+    <div id="audio-display">
+      <button id="play-audio-btn" onclick="toggleAudio()">▶</button>
+      <div class="audio-info">
+        <div class="audio-label">Audio sample</div>
+        <div id="audio-waveform"></div>
+        <div id="audio-status">Tap ▶ to play</div>
+      </div>
+    </div>
+
+    <div id="hint-area">
+      <button id="hint-btn" onclick="revealHint()">− Reveal hint (−200 pts)</button>
+      <div id="hints-container"></div>
+    </div>
+  </div>
+
+  <div id="wager-area">
+    <span class="wager-lbl">Wager:</span>
+    <div class="wager-opts">
+      <button class="wager-btn" onclick="setWager(1)">×1</button>
+      <button class="wager-btn" onclick="setWager(2)">×2</button>
+      <button class="wager-btn selected" onclick="setWager(3)">×3</button>
+      <button class="wager-btn" onclick="setWager(4)">×4</button>
+      <button class="wager-btn" onclick="setWager(5)">×5</button>
+    </div>
+    <span class="wager-pts">= <span id="wager-preview">300</span> pts</span>
+  </div>
+
+  <div id="lang-section">
+    <input type="text" id="lang-search" placeholder="Search languages…" oninput="filterLangs(this.value)" autocomplete="off" autocorrect="off" spellcheck="false">
+    <div id="lang-grid"></div>
+  </div>
+
+</div>
+
+<!-- RESULT -->
+<div id="result-overlay">
+  <div class="res-card">
+    <div class="res-lang-name" id="res-name">—</div>
+    <div class="res-lang-native" id="res-native">—</div>
+    <div class="res-outcome" id="res-outcome">—</div>
+    <div class="res-score" id="res-score">0</div>
+    <div class="res-score-lbl">points</div>
+    <div class="res-detail" id="res-detail"></div>
+    <div class="res-sample" id="res-sample"></div>
+    <button class="btn-next" id="btn-next" onclick="nextRound()">Next Language →</button>
+  </div>
+</div>
+
+<!-- FINAL -->
+<div id="final-overlay">
+  <div class="final-card">
+    <div class="final-title">Session Complete</div>
+    <div class="final-score" id="final-score">0</div>
+    <div class="final-max" id="final-max">out of 0 possible</div>
+    <div class="final-grade" id="final-grade"></div>
+    <button class="btn-next" onclick="location.reload()">↺ Play Again</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// LANGUAGE DATABASE
+// Each entry: name, native script, wikipedia lang code,
+// family (for hints), spoken (approx millions)
+// ─────────────────────────────────────────────
+const LANGS_COMMON = [
+  { name:'English',    native:'English',        code:'en',  family:'Germanic',   branch:'West Germanic' },
+  { name:'Spanish',    native:'Español',         code:'es',  family:'Romance',    branch:'Iberian' },
+  { name:'French',     native:'Français',        code:'fr',  family:'Romance',    branch:'Gallo-Romance' },
+  { name:'German',     native:'Deutsch',         code:'de',  family:'Germanic',   branch:'West Germanic' },
+  { name:'Italian',    native:'Italiano',        code:'it',  family:'Romance',    branch:'Italo-Dalmatian' },
+  { name:'Portuguese', native:'Português',       code:'pt',  family:'Romance',    branch:'Iberian' },
+  { name:'Russian',    native:'Русский',         code:'ru',  family:'Slavic',     branch:'East Slavic' },
+  { name:'Chinese',    native:'中文',            code:'zh',  family:'Sino-Tibetan',branch:'Sinitic' },
+  { name:'Japanese',   native:'日本語',          code:'ja',  family:'Japonic',    branch:'Japanese' },
+  { name:'Arabic',     native:'العربية',         code:'ar',  family:'Semitic',    branch:'Arabic' },
+  { name:'Hindi',      native:'हिन्दी',          code:'hi',  family:'Indo-Aryan', branch:'Central Indo-Aryan' },
+  { name:'Korean',     native:'한국어',           code:'ko',  family:'Koreanic',   branch:'Korean' },
+  { name:'Turkish',    native:'Türkçe',          code:'tr',  family:'Turkic',     branch:'Oghuz' },
+  { name:'Polish',     native:'Polski',          code:'pl',  family:'Slavic',     branch:'West Slavic' },
+  { name:'Dutch',      native:'Nederlands',      code:'nl',  family:'Germanic',   branch:'West Germanic' },
+  { name:'Swedish',    native:'Svenska',         code:'sv',  family:'Germanic',   branch:'North Germanic' },
+  { name:'Greek',      native:'Ελληνικά',        code:'el',  family:'Hellenic',   branch:'Greek' },
+  { name:'Hebrew',     native:'עברית',           code:'he',  family:'Semitic',    branch:'Canaanite' },
+  { name:'Persian',    native:'فارسی',           code:'fa',  family:'Iranian',    branch:'Western Iranian' },
+  { name:'Indonesian', native:'Bahasa Indonesia',code:'id',  family:'Austronesian',branch:'Malayo-Polynesian' },
+  { name:'Ukrainian',  native:'Українська',      code:'uk',  family:'Slavic',     branch:'East Slavic' },
+  { name:'Romanian',   native:'Română',          code:'ro',  family:'Romance',    branch:'Eastern Romance' },
+  { name:'Czech',      native:'Čeština',         code:'cs',  family:'Slavic',     branch:'West Slavic' },
+  { name:'Hungarian',  native:'Magyar',          code:'hu',  family:'Uralic',     branch:'Ugric' },
+  { name:'Finnish',    native:'Suomi',           code:'fi',  family:'Uralic',     branch:'Finnic' },
+];
+
+const LANGS_HARD = [
+  ...LANGS_COMMON,
+  { name:'Swahili',    native:'Kiswahili',       code:'sw',  family:'Niger-Congo',branch:'Bantu' },
+  { name:'Welsh',      native:'Cymraeg',          code:'cy',  family:'Celtic',     branch:'Brittonic' },
+  { name:'Basque',     native:'Euskara',          code:'eu',  family:'Language isolate', branch:'—' },
+  { name:'Icelandic',  native:'Íslenska',         code:'is',  family:'Germanic',   branch:'North Germanic' },
+  { name:'Norwegian',  native:'Norsk',            code:'no',  family:'Germanic',   branch:'North Germanic' },
+  { name:'Danish',     native:'Dansk',            code:'da',  family:'Germanic',   branch:'North Germanic' },
+  { name:'Catalan',    native:'Català',           code:'ca',  family:'Romance',    branch:'Iberian' },
+  { name:'Slovak',     native:'Slovenčina',       code:'sk',  family:'Slavic',     branch:'West Slavic' },
+  { name:'Bulgarian',  native:'Български',        code:'bg',  family:'Slavic',     branch:'South Slavic' },
+  { name:'Croatian',   native:'Hrvatski',         code:'hr',  family:'Slavic',     branch:'South Slavic' },
+  { name:'Serbian',    native:'Српски',           code:'sr',  family:'Slavic',     branch:'South Slavic' },
+  { name:'Lithuanian', native:'Lietuvių',         code:'lt',  family:'Baltic',     branch:'Eastern Baltic' },
+  { name:'Latvian',    native:'Latviešu',         code:'lv',  family:'Baltic',     branch:'Eastern Baltic' },
+  { name:'Estonian',   native:'Eesti',            code:'et',  family:'Uralic',     branch:'Finnic' },
+  { name:'Vietnamese', native:'Tiếng Việt',       code:'vi',  family:'Austroasiatic',branch:'Vietic' },
+  { name:'Thai',       native:'ภาษาไทย',          code:'th',  family:'Kra-Dai',    branch:'Tai' },
+  { name:'Malay',      native:'Bahasa Melayu',    code:'ms',  family:'Austronesian',branch:'Malayo-Polynesian' },
+  { name:'Afrikaans',  native:'Afrikaans',        code:'af',  family:'Germanic',   branch:'West Germanic' },
+  { name:'Slovenian',  native:'Slovenščina',      code:'sl',  family:'Slavic',     branch:'South Slavic' },
+  { name:'Albanian',   native:'Shqip',            code:'sq',  family:'Albanian',   branch:'—' },
+  { name:'Macedonian', native:'Македонски',       code:'mk',  family:'Slavic',     branch:'South Slavic' },
+  { name:'Belarusian', native:'Беларуская',       code:'be',  family:'Slavic',     branch:'East Slavic' },
+  { name:'Georgian',   native:'ქართული',          code:'ka',  family:'Kartvelian', branch:'Georgian' },
+  { name:'Armenian',   native:'Հայերեն',          code:'hy',  family:'Armenian',   branch:'—' },
+  { name:'Azerbaijani',native:'Azərbaycanca',     code:'az',  family:'Turkic',     branch:'Oghuz' },
+  { name:'Kazakh',     native:'Қазақша',          code:'kk',  family:'Turkic',     branch:'Kipchak' },
+  { name:'Uzbek',      native:'Oʻzbekcha',        code:'uz',  family:'Turkic',     branch:'Karluk' },
+  { name:'Mongolian',  native:'Монгол',           code:'mn',  family:'Mongolic',   branch:'Central Mongolic' },
+  { name:'Tagalog',    native:'Tagalog',          code:'tl',  family:'Austronesian',branch:'Philippine' },
+  { name:'Galician',   native:'Galego',           code:'gl',  family:'Romance',    branch:'Iberian' },
+];
+
+// Wikipedia article titles used to fetch sample text per language
+// These are well-known articles that exist across most Wikipedias
+const SAMPLE_ARTICLES = [
+  'Earth', 'Water', 'Sun', 'Moon', 'Time', 'History', 'Science',
+  'Music', 'Language', 'City', 'Food', 'Art', 'Mathematics', 'Philosophy'
+];
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+const TOTAL = 5;
+const BASE = 100;
+let rounds = [], curr = 0, totalScore = 0;
+let inputMode = 'text';      // 'text' | 'audio'
+let difficulty = 'easy';     // 'easy' | 'hard'
+let wager = 3;
+let hintsUsed = 0;
+let answered = false;
+let currentLang = null;
+let currentSample = '';
+let audio = null;
+let isPlaying = false;
+let waveInterval = null;
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  buildPips();
+  buildWaveform();
+  startGame();
+});
+
+function startGame() {
+  const pool = difficulty === 'hard' ? LANGS_HARD : LANGS_COMMON;
+  const shuffled = [...pool].sort(() => Math.random() - .5);
+  rounds = shuffled.slice(0, TOTAL);
+  curr = 0; totalScore = 0;
+  updateHUD();
+  loadRound();
+}
+
+function buildPips() {
+  const c = document.getElementById('pips'); c.innerHTML = '';
+  for (let i = 0; i < TOTAL; i++) {
+    const p = document.createElement('div'); p.className='pip'+(i===0?' cur':''); p.id=`p${i}`; c.appendChild(p);
+  }
+}
+function syncPips() {
+  for (let i = 0; i < TOTAL; i++) {
+    const p = document.getElementById(`p${i}`);
+    if (p) p.className='pip'+(i<curr?' done':i===curr?' cur':'');
+  }
+}
+function updateHUD() { document.getElementById('hud-score').textContent = totalScore.toLocaleString(); }
+
+function buildWaveform() {
+  const wf = document.getElementById('audio-waveform'); wf.innerHTML = '';
+  for (let i = 0; i < 30; i++) {
+    const b = document.createElement('div');
+    b.className = 'wave-bar'; b.id = `wb${i}`;
+    const h = 6 + Math.random() * 22;
+    b.style.height = h + 'px';
+    b.style.setProperty('--dur', (.4 + Math.random() * .6) + 's');
+    b.style.animationDelay = (Math.random() * .4) + 's';
+    wf.appendChild(b);
+  }
+}
+function setWaveActive(active) {
+  for (let i = 0; i < 30; i++) {
+    document.getElementById(`wb${i}`)?.classList.toggle('active', active);
+  }
+}
+
+// ─────────────────────────────────────────────
+// MODE / DIFFICULTY TOGGLES
+// ─────────────────────────────────────────────
+function setInputMode(mode) {
+  inputMode = mode;
+  document.getElementById('mode-text').classList.toggle('active', mode==='text');
+  document.getElementById('mode-audio').classList.toggle('active', mode==='audio');
+  // Restart game with new mode
+  startGame();
+}
+
+function setDifficulty(diff) {
+  difficulty = diff;
+  document.getElementById('diff-easy').classList.toggle('active', diff==='easy');
+  document.getElementById('diff-hard').classList.toggle('active', diff==='hard');
+  startGame();
+}
+
+// ─────────────────────────────────────────────
+// WAGER
+// ─────────────────────────────────────────────
+function setWager(n) {
+  wager = n;
+  document.querySelectorAll('.wager-btn').forEach((b,i) => b.classList.toggle('selected', i===n-1));
+  document.getElementById('wager-preview').textContent = (BASE * n).toLocaleString();
+}
+
+// ─────────────────────────────────────────────
+// ROUND
+// ─────────────────────────────────────────────
+async function loadRound() {
+  currentLang = rounds[curr];
+  hintsUsed = 0;
+  answered = false;
+  currentSample = '';
+  stopAudio();
+
+  document.getElementById('result-overlay').classList.remove('show');
+  document.getElementById('round-info').textContent = `ROUND ${curr+1} / ${TOTAL}`;
+  document.getElementById('hint-btn').disabled = false;
+  document.getElementById('hint-btn').textContent = '− Reveal hint (−200 pts)';
+  document.getElementById('hints-container').innerHTML = '';
+  document.getElementById('lang-search').value = '';
+  setWager(3);
+
+  syncPips(); updateHUD();
+
+  const pool = difficulty === 'hard' ? LANGS_HARD : LANGS_COMMON;
+  buildLangGrid(pool.map(l => l.name).sort());
+
+  if (inputMode === 'text') {
+    showTextMode();
+    await fetchSample();
+  } else {
+    showAudioMode();
+    await fetchAudio();
+  }
+}
+
+// ─────────────────────────────────────────────
+// TEXT MODE
+// ─────────────────────────────────────────────
+function showTextMode() {
+  document.getElementById('text-display').classList.remove('show');
+  document.getElementById('text-loading').classList.remove('hidden');
+  document.getElementById('audio-display').classList.remove('show');
+}
+
+async function fetchSample() {
+  const article = SAMPLE_ARTICLES[Math.floor(Math.random() * SAMPLE_ARTICLES.length)];
+  const code = currentLang.code;
+
+  try {
+    // Wikipedia REST API summary — CORS friendly, returns extract
+    const res = await fetch(
+      `https://${code}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(article)}`,
+      { headers: { 'Api-User-Agent': 'LanguageGuessr/1.0' } }
+    );
+
+    if (!res.ok) throw new Error('Not found');
+    const data = await res.json();
+    let text = data.extract || '';
+
+    // Take a natural excerpt of 80-150 chars
+    if (text.length > 200) {
+      // Find a sentence break between 80-200 chars
+      const period = text.indexOf('.', 80);
+      text = period > 0 && period < 250 ? text.slice(0, period + 1) : text.slice(0, 150);
+    }
+
+    currentSample = text;
+    document.getElementById('text-loading').classList.add('hidden');
+    const el = document.getElementById('text-display');
+    el.textContent = text;
+    el.classList.add('show');
+
+  } catch(e) {
+    // Fallback: try a different article
+    const fallback = SAMPLE_ARTICLES[Math.floor(Math.random() * SAMPLE_ARTICLES.length)];
+    try {
+      const res2 = await fetch(`https://${code}.wikipedia.org/api/rest_v1/page/summary/${fallback}`);
+      const data2 = await res2.json();
+      const text2 = (data2.extract || '').slice(0, 180);
+      currentSample = text2;
+      document.getElementById('text-loading').classList.add('hidden');
+      const el = document.getElementById('text-display');
+      el.textContent = text2 || `[Sample unavailable for ${currentLang.name}]`;
+      el.classList.add('show');
+    } catch {
+      document.getElementById('text-loading').classList.add('hidden');
+      document.getElementById('text-display').textContent = `[Sample unavailable]`;
+      document.getElementById('text-display').classList.add('show');
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// AUDIO MODE
+// Uses Wikipedia's spoken Wikipedia articles where available,
+// falling back to the Web Speech API (TTS) for others
+// ─────────────────────────────────────────────
+function showAudioMode() {
+  document.getElementById('text-loading').classList.add('hidden');
+  document.getElementById('text-display').classList.remove('show');
+  document.getElementById('audio-display').classList.add('show');
+  document.getElementById('audio-status').textContent = 'Tap ▶ to play';
+  document.getElementById('play-audio-btn').textContent = '▶';
+  document.getElementById('play-audio-btn').classList.remove('playing');
+}
+
+async function fetchAudio() {
+  // First fetch a text sample to use for TTS
+  await fetchSample();
+  // Show text-display in audio mode too (redacted) — just prep the sample
+  document.getElementById('text-display').classList.remove('show');
+  document.getElementById('audio-display').classList.add('show');
+  document.getElementById('audio-status').textContent = 'Sample ready — tap ▶';
+}
+
+function toggleAudio() {
+  if (isPlaying) {
+    stopAudio();
+  } else {
+    playAudio();
+  }
+}
+
+function playAudio() {
+  if (!currentSample) {
+    document.getElementById('audio-status').textContent = 'No sample loaded yet…';
+    return;
+  }
+
+  // Use Web Speech API TTS — works in all modern browsers, no CORS
+  if (!window.speechSynthesis) {
+    document.getElementById('audio-status').textContent = 'TTS not supported in this browser';
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utter = new SpeechSynthesisUtterance(currentSample);
+
+  // Map language code to BCP-47 locale
+  const localeMap = {
+    en:'en-US', es:'es-ES', fr:'fr-FR', de:'de-DE', it:'it-IT', pt:'pt-PT',
+    ru:'ru-RU', zh:'zh-CN', ja:'ja-JP', ar:'ar-SA', hi:'hi-IN', ko:'ko-KR',
+    tr:'tr-TR', pl:'pl-PL', nl:'nl-NL', sv:'sv-SE', el:'el-GR', he:'he-IL',
+    fa:'fa-IR', id:'id-ID', uk:'uk-UA', ro:'ro-RO', cs:'cs-CZ', hu:'hu-HU',
+    fi:'fi-FI', sw:'sw-KE', cy:'cy-GB', eu:'eu-ES', is:'is-IS', no:'nb-NO',
+    da:'da-DK', ca:'ca-ES', sk:'sk-SK', bg:'bg-BG', hr:'hr-HR', sr:'sr-RS',
+    lt:'lt-LT', lv:'lv-LV', et:'et-EE', vi:'vi-VN', th:'th-TH', ms:'ms-MY',
+    af:'af-ZA', sl:'sl-SI', sq:'sq-AL', mk:'mk-MK', be:'be-BY', ka:'ka-GE',
+    hy:'hy-AM', az:'az-AZ', kk:'kk-KZ', uz:'uz-UZ', mn:'mn-MN', tl:'tl-PH',
+    gl:'gl-ES',
+  };
+
+  utter.lang = localeMap[currentLang.code] || currentLang.code;
+  utter.rate = 0.9;
+
+  utter.onstart = () => {
+    isPlaying = true;
+    setWaveActive(true);
+    document.getElementById('play-audio-btn').textContent = '⏹';
+    document.getElementById('play-audio-btn').classList.add('playing');
+    document.getElementById('audio-status').textContent = 'Playing…';
+  };
+  utter.onend = () => {
+    isPlaying = false;
+    setWaveActive(false);
+    document.getElementById('play-audio-btn').textContent = '▶';
+    document.getElementById('play-audio-btn').classList.remove('playing');
+    document.getElementById('audio-status').textContent = 'Tap ▶ to replay';
+  };
+  utter.onerror = () => {
+    isPlaying = false;
+    setWaveActive(false);
+    document.getElementById('play-audio-btn').textContent = '▶';
+    document.getElementById('play-audio-btn').classList.remove('playing');
+    document.getElementById('audio-status').textContent = 'Playback error — try text mode';
+  };
+
+  window.speechSynthesis.speak(utter);
+}
+
+function stopAudio() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (audio) { audio.pause(); audio = null; }
+  isPlaying = false;
+  setWaveActive(false);
+  document.getElementById('play-audio-btn').textContent = '▶';
+  document.getElementById('play-audio-btn').classList.remove('playing');
+}
+
+// ─────────────────────────────────────────────
+// HINTS
+// ─────────────────────────────────────────────
+function revealHint() {
+  hintsUsed++;
+  const hints = [
+    `Family: ${currentLang.family}`,
+    `Branch: ${currentLang.branch}`,
+    `Script starts with: ${currentLang.native.charAt(0)}`,
+  ];
+  const hint = hints[hintsUsed - 1];
+  if (!hint) return;
+
+  const pill = document.createElement('div');
+  pill.className = 'hint-pill revealed';
+  pill.textContent = hint;
+  document.getElementById('hints-container').appendChild(pill);
+
+  if (hintsUsed >= hints.length) {
+    document.getElementById('hint-btn').disabled = true;
+    document.getElementById('hint-btn').textContent = 'All hints revealed';
+  } else {
+    document.getElementById('hint-btn').textContent = `− Reveal hint (−200 pts)`;
+  }
+}
+
+// ─────────────────────────────────────────────
+// LANGUAGE GRID
+// ─────────────────────────────────────────────
+function buildLangGrid(names) {
+  const pool = difficulty === 'hard' ? LANGS_HARD : LANGS_COMMON;
+  const grid = document.getElementById('lang-grid'); grid.innerHTML = '';
+  names.forEach(name => {
+    const lang = pool.find(l => l.name === name);
+    if (!lang) return;
+    const btn = document.createElement('button');
+    btn.className = 'lang-btn';
+    btn.innerHTML = `${lang.name} <span class="lang-native">${lang.native}</span>`;
+    btn.onclick = () => submitGuess(lang);
+    grid.appendChild(btn);
+  });
+}
+
+function filterLangs(q) {
+  const pool = difficulty === 'hard' ? LANGS_HARD : LANGS_COMMON;
+  const filtered = pool.filter(l =>
+    l.name.toLowerCase().includes(q.toLowerCase()) ||
+    l.native.toLowerCase().includes(q.toLowerCase())
+  ).map(l => l.name).sort();
+  buildLangGrid(filtered);
+}
+
+// ─────────────────────────────────────────────
+// GUESS + SCORING
+// ─────────────────────────────────────────────
+function submitGuess(lang) {
+  if (answered) return;
+  answered = true;
+  stopAudio();
+
+  const correct = lang.name === currentLang.name;
+  const hintPenalty = hintsUsed * 200;
+  const pts = correct ? Math.max(0, BASE * wager - hintPenalty) : 0;
+  totalScore += pts;
+
+  // Highlight buttons
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    const n = btn.textContent.trim().split('\n')[0].trim();
+    if (n === currentLang.name) btn.classList.add('correct');
+    else if (n === lang.name && !correct) btn.classList.add('wrong');
+    btn.disabled = true;
+  });
+
+  showResult(correct, pts, lang);
+}
+
+function showResult(correct, pts, guessed) {
+  document.getElementById('res-name').textContent = currentLang.name;
+  document.getElementById('res-native').textContent = currentLang.native;
+
+  const outcome = document.getElementById('res-outcome');
+  outcome.textContent = correct ? '✓ CORRECT' : `✗ YOU GUESSED ${guessed.name.toUpperCase()}`;
+  outcome.className = 'res-outcome ' + (correct ? 'correct' : 'wrong');
+
+  document.getElementById('res-score').textContent = pts.toLocaleString();
+
+  const hintPenalty = hintsUsed * 200;
+  document.getElementById('res-detail').innerHTML = correct
+    ? `Wager ×${wager} · Base <span>${BASE * wager}</span>${hintPenalty > 0 ? ` · Hint penalty <span>−${hintPenalty}</span>` : ''}`
+    : `Better luck next time · <span>${currentLang.family}</span> language family`;
+
+  document.getElementById('res-sample').textContent = currentSample || '—';
+  document.getElementById('btn-next').textContent = curr >= TOTAL-1 ? '🏆 Final Score' : 'Next Language →';
+  document.getElementById('result-overlay').classList.add('show');
+  updateHUD();
+}
+
+function nextRound() {
+  curr++;
+  if (curr >= TOTAL) { showFinal(); return; }
+  loadRound();
+}
+
+function showFinal() {
+  const maxPossible = TOTAL * BASE * 5;
+  document.getElementById('final-score').textContent = totalScore.toLocaleString();
+  document.getElementById('final-max').textContent = `out of ${maxPossible.toLocaleString()} possible`;
+
+  const pct = totalScore / maxPossible;
+  const g = document.getElementById('final-grade');
+  if (pct > .85)      { g.textContent = 'S · Polyglot';         g.className = 'final-grade fg-s'; }
+  else if (pct > .65) { g.textContent = 'A · Linguist';         g.className = 'final-grade fg-a'; }
+  else if (pct > .40) { g.textContent = 'B · Language Learner'; g.className = 'final-grade fg-b'; }
+  else                { g.textContent = 'C · Monoglot';         g.className = 'final-grade fg-c'; }
+
+  document.getElementById('result-overlay').classList.remove('show');
+  document.getElementById('final-overlay').classList.add('show');
+}
+</script>
+</body>
+</html>
